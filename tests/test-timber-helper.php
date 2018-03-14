@@ -33,6 +33,16 @@
 			$this->assertEquals(array('guitar', 'drums'), $instruments);
 		}
 
+		function testPluckObjectWithMethod() {
+			require_once(__DIR__.'/php/timber-post-subclass.php');
+			$tps = new TimberPostSubclass();
+			$jimmy = new stdClass();
+			$jimmy->name = 'Jimmy';
+			$pumpkins = array($tps, $jimmy);
+			$bar = \Timber\Helper::pluck($pumpkins, 'foo');
+			$this->assertEquals(array('bar'), $bar);
+		}
+
 		function testCommentFormPHP() {
 			$post_id = $this->factory->post->create();
 			$form = TimberHelper::get_comment_form($post_id);
@@ -105,6 +115,15 @@
 			$this->assertEquals(1, $index);
 			$obj = TimberHelper::get_object_by_property($arr, 'skill', 'cooking');
 			$this->assertEquals('austin', $obj->name);
+		}
+
+		function testGetObjectByPropertyButNoMatch() {
+			$obj1 = new stdClass();
+			$obj1->name = 'mark';
+			$obj1->skill = 'acro yoga';
+			$arr = array($obj1);
+			$result = TimberHelper::get_object_by_property($arr, 'skill', 'cooking');
+			$this->assertFalse($result);
 		}
 
 		function testGetArrayIndexByProperty(){
@@ -190,4 +209,45 @@
 			$this->assertEquals('Robbie', $people[2]->name);
 			$this->assertEquals(1984, $people[1]->year);
 		}
+
+		function testArrayFilter() {
+			$posts = [];
+			$posts[] = $this->factory->post->create(array('post_title' => 'Stringer Bell', 'post_content' => 'Idris Elba'));
+			$posts[] = $this->factory->post->create(array('post_title' => 'Snoop', 'post_content' => 'Felicia Pearson'));
+			$posts[] = $this->factory->post->create(array('post_title' => 'Cheese', 'post_content' => 'Method Man'));
+			$posts = Timber::get_posts($posts);
+			$template = '{% for post in posts | filter("snoop")%}{{ post.content|striptags }}{% endfor %}';
+			$str = Timber::compile_string($template, array('posts' => $posts));
+			$this->assertEquals('Felicia Pearson', trim($str));
+		}
+
+		function testArrayFilterKeyValueUsingPostQuery() {
+			$posts = [];
+			$posts[] = $this->factory->post->create(array('post_title' => 'Stringer Bell', 'post_content' => 'Idris Elba'));
+			$posts[] = $this->factory->post->create(array('post_title' => 'Snoop', 'post_content' => 'Felicia Pearson'));
+			$posts[] = $this->factory->post->create(array('post_title' => 'Cheese', 'post_content' => 'Method Man'));
+			$posts = new Timber\PostQuery($posts);
+			$template = '{% for post in posts | filter({post_content: "Method Man"
+		})%}{{ post.title }}{% endfor %}';
+			$str = Timber::compile_string($template, array('posts' => $posts));
+			$this->assertEquals('Cheese', trim($str));
+		}
+
+		function testArrayFilterMulti() {
+			$posts = [];
+			$posts[] = $this->factory->post->create(array('post_title' => 'Stringer Bell', 'post_content' => 'Idris Elba'));
+			$posts[] = $this->factory->post->create(array('post_title' => 'Snoop', 'post_content' => 'Felicia Pearson'));
+			$posts[] = $this->factory->post->create(array('post_title' => 'Cheese', 'post_content' => 'Method Man'));
+			$posts = Timber::get_posts($posts);
+			$template = '{% for post in posts | filter({slug:"snoop", post_content:"Idris Elba"}, "OR")%}{{ post.title }} {% endfor %}';
+			$str = Timber::compile_string($template, array('posts' => $posts));
+			$this->assertEquals('Stringer Bell Snoop', trim($str));
+		}
+
+		function testArrayFilterWithBogusArray() {
+			$template = '{% for post in posts | filter({slug:"snoop", post_content:"Idris Elba"}, "OR")%}{{ post.title }} {% endfor %}';
+			$str = Timber::compile_string($template, array('posts' => 'foobar'));
+			$this->assertEquals('', $str);
+		}
+
 	}

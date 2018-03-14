@@ -81,6 +81,27 @@ class TestTimberImage extends TimberImage_UnitTestCase {
  * Tests
  ---------------- */
 
+ 	function testInitFromID() {
+		$pid = $this->factory->post->create();
+		$filename = self::copyTestImage( 'arch.jpg' );
+		$attachment = array( 'post_title' => 'The Arch', 'post_content' => '' );
+		$iid = wp_insert_attachment( $attachment, $filename, $pid );
+		$image = new TimberImage( $iid );
+		$this->assertEquals( 1500, $image->width() );
+	}
+
+	function testWithOutputBuffer() {
+		ob_start();
+		$post = $this->get_post_with_image();
+		$str = '<img src="{{ post.thumbnail.src|resize(510, 280) }}" />';
+		Timber::render_string($str, array('post' => $post));
+		$result = ob_get_contents();
+		ob_end_clean();
+		$m = date('m');
+		$y = date('Y');
+		$this->assertEquals('<img src="http://example.org/wp-content/uploads/'.$y.'/'.$m.'/arch-510x280-c-default.jpg" />', $result);
+	}
+
  	function testReplacedImage() {
  		$pid = $this->factory->post->create(array('post_type' => 'post'));
  		$attach_id = self::get_image_attachment($pid, 'arch.jpg');
@@ -89,7 +110,7 @@ class TestTimberImage extends TimberImage_UnitTestCase {
  		$resized_one = Timber\ImageHelper::get_server_location($str);
  		sleep(1);
  		$filename = self::copyTestImage('cardinals.jpg', 'arch.jpg');
- 		
+
  		$str = Timber::compile_string($template, array('img' => $attach_id));
  		$resized_tester = Timber\ImageHelper::get_server_location($str);
 
@@ -101,8 +122,6 @@ class TestTimberImage extends TimberImage_UnitTestCase {
  		$this->assertTrue($is_white);
  		$is_also_white = TestTimberImage::checkPixel($resized_one, 5,5, '#FFFFFF');
  		$this->assertTrue($is_also_white);
- 		
-
  	}
 
  	function testResizedReplacedImage() {
@@ -122,7 +141,6 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 
  		$pizza_md5 = md5( file_get_contents($resized_pizza) );
  		$this->assertEquals($pizza_md5, $test_md5);
-
  	}
 
  	function testImageLink() {
@@ -152,6 +170,9 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$this->assertEquals( 1.5, $image->aspect() );
 	}
 
+	/**
+	 * @group maybeSkipped
+	 */
 	function testExternalImageResize() {
 		if ( !self::is_connected() ) {
 			$this->markTestSkipped('Cannot test external images when not connected to internet');
@@ -244,6 +265,11 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$this->assertFalse( TimberImageHelper::is_animated_gif('notreal.gif') );
 	}
 
+
+
+	/**
+	 * @group maybeSkipped
+	 */
 	function testAnimatedGifResize() {
 		if ( ! extension_loaded( 'imagick' ) ) {
 			self::markTestSkipped( 'Animated GIF resizing test requires Imagick extension' );
@@ -280,6 +306,9 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 
 	}
 
+	/**
+	 * @group maybeSkipped
+	 */
 	function testResizeTallImage() {
 		$data = array();
 		$data['size'] = array( 'width' => 600 );
@@ -314,15 +343,6 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$image = new TimberImage( $filename );
 		$this->assertStringStartsWith('/wp-content', $image->path());
 		$this->assertStringEndsWith('.jpg', $image->path());
-	}
-
-	function testInitFromID() {
-		$pid = $this->factory->post->create();
-		$filename = self::copyTestImage( 'arch.jpg' );
-		$attachment = array( 'post_title' => 'The Arch', 'post_content' => '' );
-		$iid = wp_insert_attachment( $attachment, $filename, $pid );
-		$image = new TimberImage( $iid );
-		$this->assertEquals( 1500, $image->width() );
 	}
 
 	function testInitFromFilePath() {
@@ -457,7 +477,7 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		return false;
 	}
 
-	public static function checkPixel($file, $x, $y, $color = '#FFFFFF', $upper_color = false) {
+	public static function checkPixel($file, $x, $y, $color = false, $upper_color = false) {
 		if ( self::is_png($file) ) {
 			$image = imagecreatefrompng( $file );
 		} else if ( self::is_gif($file) ) {
@@ -465,12 +485,16 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		} else {
 			$image = imagecreatefromjpeg( $file );
 		}
-		$pixel_rgb = imagecolorat( $image, $x, $y );
-		$colors_of_file = imagecolorsforindex( $image, $pixel_rgb );
+		$pixel_rgba = imagecolorat( $image, $x, $y );
+		$colors_of_file = imagecolorsforindex( $image, $pixel_rgba );
 		if ($upper_color) {
 			$upper_colors = ImageOperation::hexrgb($upper_color);
 		}
 		$test_colors = ImageOperation::hexrgb($color);
+		if( false === $color ) {
+			$alpha = ($pixel_rgba & 0x7F000000) >> 24;
+			return $alpha === 127;
+		}
 		if ( isset($upper_colors) && $upper_colors ) {
 			if (self::checkChannel('red', $test_colors, $colors_of_file, $upper_colors) &&
 				self::checkChannel('green', $test_colors, $colors_of_file, $upper_colors) &&
@@ -503,6 +527,9 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		return ImageOperation::rgbhex($r, $g, $b);
 	}
 
+	/**
+	 * @group maybeSkipped
+	 */
 	function testPNGtoJPG() {
 		if ( ! extension_loaded( 'gd' ) ) {
 			self::markTestSkipped( 'PNG to JPEG conversion test requires GD extension' );
@@ -668,6 +695,10 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$this->assertFileNotExists( $resized_500_file );
 	}
 
+	/**
+	 *
+	 * @group maybeSkipped
+	 */
 	function testLetterboxImageDeletion() {
 		if ( ! extension_loaded( 'gd' ) ) {
 			self::markTestSkipped( 'Letterbox image test requires GD extension' );
@@ -687,12 +718,15 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 
 	function _makeThemeImageDirectory() {
 		$theme_url = get_theme_root_uri().'/'.get_stylesheet();
-		$img_dir = get_stylesheet_directory_uri().'/images';
+		$img_dir = realpath(get_stylesheet_directory_uri()).'/images';
 		if ( strpos($img_dir, 'http') === 0 ) {
 			$img_dir = Timber\URLHelper::url_to_file_system($img_dir);
 		}
 		if ( !file_exists($img_dir) ) {
-    		mkdir($img_dir, 0777, true);
+			$parent = dirname($img_dir);
+			// error_log($parent);
+			chmod($parent, 0777);
+    		$res = mkdir($img_dir, 0777, true);
 		}
 	}
 
@@ -707,39 +741,52 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 
 	function testThemeImageResize() {
 		$theme_url = get_theme_root_uri().'/'.get_stylesheet();
-		self::_makeThemeImageDirectory();
 		$source = __DIR__.'/assets/cardinals.jpg';
-		$dest = get_stylesheet_directory_uri().'/images/cardinals.jpg';
+		$dest = get_stylesheet_directory_uri().'/cardinals.jpg';
 		if ( strpos($dest, 'http') === 0 ) {
 			$dest = Timber\URLHelper::url_to_file_system($dest);
 		}
+		$dest = self::maybe_realpath($dest);
 		copy($source, $dest);
 		$this->assertTrue(file_exists($dest));
-		$image = $theme_url.'/images/cardinals.jpg';
+		$image = $theme_url.'/cardinals.jpg';
 		$image = str_replace( 'http://example.org', '', $image );
 		$data = array();
 		$data['test_image'] = $image;
 		$data['size'] = array( 'width' => 120, 'height' => 120 );
 		$str = Timber::compile( 'assets/image-test.twig', $data );
-		$file_location = get_stylesheet_directory_uri().'/images/cardinals-120x120-c-default.jpg';
+		$file_location = get_stylesheet_directory_uri().'/cardinals-120x120-c-default.jpg';
+		if ( strpos($file_location, 'http') === 0 ) {
+			$file_location = Timber\URLHelper::url_to_file_system($file_location);
+		}
+		$file_location = self::maybe_realpath($file_location);
 		$this->assertFileExists( $file_location );
 		$this->addFile( $file_location );
 	}
 
+	function maybe_realpath( $path ) {
+		if ( realpath($path) ) {
+			return realpath($path);
+		}
+		return $path;
+	}
+
+	/**
+	 * @group maybeSkipped
+	 */
 	function testThemeImageLetterbox() {
 		$theme_url = get_theme_root_uri().'/'.get_stylesheet();
-		self::_makeThemeImageDirectory();
 		if ( ! extension_loaded( 'gd' ) ) {
 			self::markTestSkipped( 'Letterbox image test requires GD extension' );
 		}
 		$source = __DIR__.'/assets/cardinals.jpg';
-		$dest = realpath(get_template_directory()).'/images/cardinals.jpg';
+		$dest = self::maybe_realpath(get_template_directory()).'/cardinals.jpg';
 		copy($source, $dest);
-		$image = $theme_url.'/images/cardinals.jpg';
+		$image = $theme_url.'/cardinals.jpg';
 		$image = str_replace( 'http://example.org', '', $image );
 		$letterboxed = TimberImageHelper::letterbox( $image, 600, 300, '#FF0000' );
-		$this->assertFileExists( realpath(get_template_directory().'/images/cardinals-lbox-600x300-FF0000.jpg') );
-		unlink( realpath(get_template_directory().'/images/cardinals-lbox-600x300-FF0000.jpg') );
+		$this->assertFileExists( realpath(get_template_directory().'/cardinals-lbox-600x300-FF0000.jpg') );
+		unlink( realpath(get_template_directory().'/cardinals-lbox-600x300-FF0000.jpg') );
 	}
 
 	function testImageWidthWithFilter() {
@@ -753,17 +800,7 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$this->assertEquals( 1500, $rendered );
 	}
 
-	function testWithOutputBuffer() {
-		ob_start();
-		$post = $this->get_post_with_image();
-		$str = '<img src="{{ post.thumbnail.src|resize(510, 280) }}" />';
-		Timber::render_string($str, array('post' => $post));
-		$result = ob_get_contents();
-		ob_end_clean();
-		$m = date('m');
-		$y = date('Y');
-		$this->assertEquals('<img src="http://example.org/wp-content/uploads/'.$y.'/'.$m.'/arch-510x280-c-default.jpg" />', $result);
-	}
+
 
 	function testResizeNamed() {
 		add_image_size('timber-testResizeNamed', $width = 600, $height = 400, $crop = true);
@@ -878,6 +915,9 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$this->assertEquals('<img src="'.$upload_dir['url'].'/'.$image->sizes['medium']['file'].'" />', trim($result));
 	}
 
+	/**
+	 * @group maybeSkipped
+	 */
 	function testGifToJpg() {
 		if ( ! extension_loaded( 'gd' ) ) {
 			self::markTestSkipped( 'JPEG conversion test requires GD extension' );
@@ -892,9 +932,12 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 
 	function testImageHelperInit() {
 		$helper = TimberImageHelper::init();
-		$this->assertTrue(defined('WP_CONTENT_SUBDIR'));
+		$this->assertTrue($helper);
 	}
 
+	/**
+	 * @group maybeSkipped
+	 */
 	function testResizeGif() {
 		if ( ! extension_loaded( 'imagick' ) ) {
 			self::markTestSkipped( 'Animated GIF resizing test requires Imagick extension' );
@@ -973,11 +1016,33 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$this->assertEquals($image->src(), $result);
 	}
 
+	// Test document like pdf, docx
+	function testTimberImageFromDocument() {
+		$pid = $this->factory->post->create();
+		$iid = self::get_image_attachment($pid, 'dummy-pdf.pdf');
+		$attachment = new TimberImage($iid);
+		$str = '{{ TimberImage(post).src }}';
+		$result = Timber::compile_string( $str, array('post' => $iid) );
+		$this->assertEquals('http://example.org/wp-content/uploads/'.date('Y/m').'/dummy-pdf.pdf', $result);
+	}
+
 	function testNoThumbnail() {
 		$pid = $this->factory->post->create();
 		$post = new TimberPost($pid);
 		$str = Timber::compile_string('Image?{{post.thumbnail.src}}', array('post' => $post));
 		$this->assertEquals('Image?', $str);
+	}
+
+	function testFilteredImageURL() {
+		add_filter('wp_get_attachment_image_src', function($image, $id, $size, $icon) {
+			$image = str_replace('jpg', 'jpeg', $image);
+			return $image;
+		}, 10, 4);
+		$post = $this->get_post_with_image();
+		$image = $post->thumbnail();
+		$str = '{{ post.thumbnail.src }}';
+		$result = Timber::compile_string( $str, array('post' => $post) );
+		$this->assertEquals('http://example.org/wp-content/uploads/'.date('Y/m').'/arch.jpeg', $result);
 	}
 
 	function testTimberImageForExtraSlashes() {
@@ -998,6 +1063,24 @@ class TestTimberImage extends TimberImage_UnitTestCase {
 		$data['url'] = $data['baseurl'];
 
 		return $data;
+	}
+
+	/**
+     * @expectedException Twig_Error_Runtime
+     */
+	function testAnimagedGifResizeWithoutImagick() {
+		define('TEST_NO_IMAGICK', true);
+		$image = self::copyTestImage('robocop.gif');
+		$data = array('crop' => 'default');
+		$data['size'] = array('width' => 90, 'height' => 90);
+		$upload_dir = wp_upload_dir();
+		$url = $upload_dir['url'].'/robocop.gif';
+		$data['test_image'] = $url;
+		$str = Timber::compile( 'assets/image-test.twig', $data );
+		$resized_path = $upload_dir['path'].'/robocop-'.$data['size']['width'].'x'.$data['size']['height'].'-c-'.$data['crop'].'.gif';
+		$this->addFile( $resized_path );
+		$this->assertFileExists( $resized_path );
+		$this->assertFalse(TimberImageHelper::is_animated_gif($resized_path));
 	}
 
 }

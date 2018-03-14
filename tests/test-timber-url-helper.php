@@ -4,6 +4,88 @@
 
 		private $mockUploadDir = false;
 
+        function testSwapProtocolHTTPtoHTTPS() {
+            $url = 'http://nytimes.com/news/reports/2017';
+            $url = Timber\URLHelper::swap_protocol($url);
+            $this->assertStringStartsWith('https://', $url);
+        }
+
+        function testSwapProtocolHTTPStoHTTP() {
+            $url = 'https://nytimes.com/news/reports/2017';
+            $url = Timber\URLHelper::swap_protocol($url);
+            $this->assertStringStartsWith('http://', $url);
+        }
+
+        function testStartsWith() {
+            $haystack = 'http://nytimes.com/news/reports/2017';
+            $starts_with = 'http://nytimes.com/news';
+            $nope = 'http://bostonglobe.com';
+            $this->assertTrue(Timber\URLHelper::starts_with($haystack, $starts_with));
+            $this->assertFalse(Timber\URLHelper::starts_with($haystack, $nope));
+        }
+
+        function testStartsWithHTTPs() {
+            $haystack = 'http://nytimes.com/news/reports/2017';
+            $starts_with = 'https://nytimes.com/news';
+            $nope = 'http://bostonglobe.com';
+            $this->assertTrue(Timber\URLHelper::starts_with($haystack, $starts_with));
+            $this->assertFalse(Timber\URLHelper::starts_with($haystack, $nope));
+        }
+
+        function testStartsWithHTTPsFlip() {
+            $haystack = 'https://nytimes.com/news/reports/2017';
+            $starts_with = 'http://nytimes.com/news';
+            $nope = 'http://bostonglobe.com';
+            $this->assertTrue(Timber\URLHelper::starts_with($haystack, $starts_with));
+            $this->assertFalse(Timber\URLHelper::starts_with($haystack, $nope));
+        }
+
+        function testFileSystemToURLWithWPML() {
+            self::_setLanguage();
+            add_filter('site_url', array($this, 'addWPMLHomeFilterForRegExTest'), 10, 2);
+            $image = TestTimberImage::copyTestImage();
+            $url = Timber\URLHelper::file_system_to_url($image);
+            $this->assertEquals('http://example2.org/wp-content/uploads/'.date('Y/m').'/arch.jpg', $url);
+            remove_filter('site_url', array($this, 'addWPMLHomeFilterForRegExTest'));
+        }
+
+        function addWPMLHomeFilterForRegExTest($url, $path) {
+            return 'http://example2.org/en'.$path;
+        }
+
+        function testFileSystemToURL() {
+            $image = TestTimberImage::copyTestImage();
+            $url = Timber\URLHelper::file_system_to_url($image);
+            $this->assertEquals('http://example.org/wp-content/uploads/'.date('Y/m').'/arch.jpg', $url);
+        }
+
+        function addWPMLHomeFilter($url, $path) {
+            return 'http://example.org/en'.$path;
+        }
+
+        function _setLanguage() {
+            if ( !defined('ICL_LANGUAGE_CODE') ) {
+                define('ICL_LANGUAGE_CODE', 'en');
+            }
+        }
+
+        function _setupWPMLDirectory() {
+            self::_setLanguage();
+            add_filter('home_url', array($this, 'addWPMLHomeFilter'), 10, 2);
+        }
+
+        function testFileSystemToURLWithWPMLPrefix() {
+            self::_setupWPMLDirectory();
+            $image = TestTimberImage::copyTestImage();
+            $url = Timber\URLHelper::file_system_to_url($image);
+            $this->assertEquals('http://example.org/wp-content/uploads/'.date('Y/m').'/arch.jpg', $url);
+            remove_filter('home_url', array($this, 'addWPMLHomeFilter'));
+        }
+
+        function testContentSubDirectory() {
+            $subdir = Timber\URLHelper::get_content_subdir();
+            $this->assertEquals('/wp-content', $subdir);
+        }
 
         function testURLToFileSystem() {
             $url = 'http://example.org/wp-content/uploads/2012/06/mypic.jpg';
@@ -41,6 +123,21 @@
             $this->assertEquals('example.com/thing/foo', $joined);
         }
 
+        function testPrependWithPort() {
+            $joined = Timber\URLHelper::prepend_to_url('http://example.com:8080/thing/', '/jiggly');
+            $this->assertEquals('http://example.com:8080/jiggly/thing/', $joined);
+        }
+
+        function testPrependWithFragment() {
+            $joined = Timber\URLHelper::prepend_to_url('http://example.com/thing/#foo', '/jiggly');
+            $this->assertEquals('http://example.com/jiggly/thing/#foo', $joined);
+        }
+
+        function testPrependWithQuery() {
+            $joined = Timber\URLHelper::prepend_to_url('http://example.com/?s=foo&jolly=good', '/search');
+            $this->assertEquals('http://example.com/search/?s=foo&jolly=good', $joined);
+        }
+
         function testUserTrailingSlashIt() {
             global $wp_rewrite;
             $wp_rewrite->use_trailing_slashes = true;
@@ -50,10 +147,30 @@
             $wp_rewrite->use_trailing_slashes = false;
         }
 
+        function testDoubleSlashesWithHTTP() {
+            $url = 'http://nytimes.com/news//world/thing.html';
+            $expected_url = 'http://nytimes.com/news/world/thing.html';
+            $url = Timber\URLHelper::remove_double_slashes($url);
+            $this->assertEquals($expected_url, $url);
+        }
+
+        function testDoubleSlashesWithHTTPS() {
+            $url = 'https://nytimes.com/news//world/thing.html';
+            $expected_url = 'https://nytimes.com/news/world/thing.html';
+            $url = Timber\URLHelper::remove_double_slashes($url);
+            $this->assertEquals($expected_url, $url);
+        }
+
         function testUserTrailingSlashItFailure() {
             $link = 'http:///example.com';
             $url = Timber\URLHelper::user_trailingslashit($link);
             $this->assertEquals($link, $url);
+        }
+
+        function testUnPreSlashIt() {
+            $str = '/wp-content/themes/undefeated/style.css';
+            $str = Timber\URLHelper::unpreslashit($str);
+            $this->assertEquals('wp-content/themes/undefeated/style.css', $str);
         }
 
         function testPreSlashIt() {
@@ -220,6 +337,12 @@
             $blog = TimberURLHelper::get_params(2);
             $this->assertEquals('whatever', $whatever);
             $this->assertEquals('blog', $blog);
+        }
+
+        function testGetParamsNadda(){
+            $_SERVER['REQUEST_URI'] = 'http://example.org/blog/post/news/2014/whatever';
+            $params = TimberURLHelper::get_params(93);
+            $this->assertNull($params);
         }
 
 

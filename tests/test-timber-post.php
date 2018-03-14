@@ -17,7 +17,6 @@
 			$post_id = $this->factory->post->create(array('post_password' => 'jiggypoof'));
 			$post = new TimberPost($post_id);
 			$this->assertTrue($post->password_required());
-			
 		}
 
 		function testNameMethod() {
@@ -498,7 +497,42 @@
 			$this->assertEquals('aside', $post->format());
 		}
 
+		function testPostClassInTwig(){
+			$pid = $this->factory->post->create();
+			$category = wp_insert_term('Uncategorized', 'category');
+			self::set_object_terms($pid, $category, 'category', true);
+			$post = new TimberPost($pid);
+			$str = Timber::compile_string("{{ post.class }}", array('post' => $post));
+			$this->assertEquals('post-'.$pid.' post type-post status-publish format-standard hentry category-uncategorized', $str);
+		}
+
 		function testPostClass(){
+			$pid = $this->factory->post->create();
+			$category = wp_insert_term('Uncategorized', 'category');
+			self::set_object_terms($pid, $category, 'category', true);
+			$post = new TimberPost($pid);
+			$this->assertEquals('post-'.$pid.' post type-post status-publish format-standard hentry category-uncategorized', $post->post_class());
+		}
+
+		function testCssClass(){
+			$pid = $this->factory->post->create();
+			$category = wp_insert_term('Uncategorized', 'category');
+			self::set_object_terms($pid, $category, 'category', true);
+			$post = new TimberPost($pid);
+			$this->assertEquals('post-'.$pid.' post type-post status-publish format-standard hentry category-uncategorized', $post->css_class());
+			$this->assertEquals('post-'.$pid.' post type-post status-publish format-standard hentry category-uncategorized additional-css-class', $post->css_class('additional-css-class'));
+		}
+
+		function testCssClassMagicCall(){
+			$pid = $this->factory->post->create();
+			$category = wp_insert_term('Uncategorized', 'category');
+			self::set_object_terms($pid, $category, 'category', true);
+			$post = new TimberPost($pid);
+			$this->assertEquals('post-'.$pid.' post type-post status-publish format-standard hentry category-uncategorized', $post->class());
+			$this->assertEquals('post-'.$pid.' post type-post status-publish format-standard hentry category-uncategorized additional-css-class', $post->class('additional-css-class'));
+		}
+
+		function testCssClassMagicGet(){
 			$pid = $this->factory->post->create();
 			$category = wp_insert_term('Uncategorized', 'category');
 			self::set_object_terms($pid, $category, 'category', true);
@@ -717,6 +751,76 @@
 			$post = new Timber\Post($post_id);
 			$form = $post->comment_form();
 			$this->assertStringStartsWith('<div id="respond"', trim($form));
+		}
+
+		function testPostWithoutGallery() {
+			$pid = $this->factory->post->create();
+			$post = new TimberPost($pid);
+
+			$this->assertEquals(null, $post->gallery());
+		}
+
+		function testPostWithGalleryCustomField() {
+			$pid = $this->factory->post->create();
+			update_post_meta($pid, 'gallery', 'foo');
+			$post = new Timber\Post($pid);
+			$this->assertEquals('foo', $post->gallery());
+		}
+
+		function testPostWithoutAudio() {
+			$pid = $this->factory->post->create();
+			$post = new TimberPost($pid);
+
+			$this->assertEquals(array(), $post->audio());
+		}
+
+		function testPostWithAudio() {
+			$quote = 'Named must your fear be before banish it you can.';
+			$quote .= '[embed]http://www.noiseaddicts.com/samples_1w72b820/280.mp3[/embed]';
+			$quote .= "No, try not. Do or do not. There is no try.";
+
+			$pid = $this->factory->post->create(array('post_content' => $quote));
+			$post = new TimberPost($pid);
+			$expected = array(
+				'<audio class="wp-audio-shortcode" id="audio-1-1" preload="none" style="width: 100%;" controls="controls"><source type="audio/mpeg" src="http://www.noiseaddicts.com/samples_1w72b820/280.mp3?_=1" /><a href="http://www.noiseaddicts.com/samples_1w72b820/280.mp3">http://www.noiseaddicts.com/samples_1w72b820/280.mp3</a></audio>',
+			);
+
+			$this->assertEquals($expected, $post->audio());
+		}
+
+		function testPostWithAudioCustomField() {
+			$pid = $this->factory->post->create();
+			update_post_meta($pid, 'audio', 'foo');
+			$post = new Timber\Post($pid);
+			$this->assertEquals('foo', $post->audio());
+		}
+
+		function testPostWithoutVideo() {
+			$pid = $this->factory->post->create();
+			$post = new TimberPost($pid);
+
+			$this->assertEquals(array(), $post->video());
+		}
+
+		function testPostWithVideo() {
+			$quote = 'Named must your fear be before banish it you can.';
+			$quote .= '[embed]https://www.youtube.com/watch?v=Jf37RalsnEs[/embed]';
+			$quote .= "No, try not. Do or do not. There is no try.";
+
+			$pid = $this->factory->post->create(array('post_content' => $quote));
+			$post = new TimberPost($pid);
+			$expected = array(
+				'<iframe width="500" height="281" src="https://www.youtube.com/embed/Jf37RalsnEs?feature=oembed" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>',
+			);
+
+			$this->assertEquals($expected, $post->video());
+		}
+
+		function testPostWithVideoCustomField() {
+			$pid = $this->factory->post->create();
+			update_post_meta($pid, 'video', 'foo');
+			$post = new Timber\Post($pid);
+			$this->assertEquals('foo', $post->video());
 		}
 
 		/**
